@@ -1,4 +1,4 @@
-name: YouTube Downloader (No Cookies)
+name: YouTube via API
 
 on:
   workflow_dispatch:
@@ -7,44 +7,26 @@ on:
         description: 'YouTube video URL'
         required: true
         type: string
-      quality:
-        description: 'Quality'
-        required: false
-        default: '720'
-        type: choice
-        options:
-          - best
-          - 720
-          - 480
-          - 360
 
 jobs:
   download:
     runs-on: ubuntu-latest
     steps:
-      - name: Install yt-dlp
-        run: pip install yt-dlp
+      - name: Get download URL from API
+        id: api
+        run: |
+          VIDEO_URL="${{ github.event.inputs.url }}"
+          API_URL="https://ytdlapi.com/api/convert?url=${VIDEO_URL}&format=mp4"
+          RESPONSE=$(curl -s "$API_URL")
+          DOWNLOAD_URL=$(echo "$RESPONSE" | jq -r '.dlink')
+          echo "download_url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
 
       - name: Download video
         run: |
-          if [ "${{ github.event.inputs.quality }}" = "best" ]; then
-            FORMAT="-f best"
-          elif [ "${{ github.event.inputs.quality }}" = "720" ]; then
-            FORMAT="-f 'best[height<=720]'"
-          elif [ "${{ github.event.inputs.quality }}" = "480" ]; then
-            FORMAT="-f 'best[height<=480]'"
-          elif [ "${{ github.event.inputs.quality }}" = "360" ]; then
-            FORMAT="-f 'best[height<=360]'"
-          fi
-          
-          yt-dlp $FORMAT \
-            --geo-bypass \
-            --extractor-args "youtube:player_client=android" \
-            --output "downloads/%(title)s.%(ext)s" \
-            "${{ github.event.inputs.url }}"
+          curl -L -o video.mp4 "${{ steps.api.outputs.download_url }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: downloaded-video
-          path: downloads/
+          name: video
+          path: video.mp4
