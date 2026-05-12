@@ -1,4 +1,4 @@
-name: YouTube via API
+name: YouTube via Invidious
 
 on:
   workflow_dispatch:
@@ -7,23 +7,52 @@ on:
         description: 'YouTube video URL'
         required: true
         type: string
+      quality:
+        description: 'Max height (360, 480, 720, best)'
+        default: '720'
+        type: string
 
 jobs:
   download:
     runs-on: ubuntu-latest
     steps:
-      - name: Get download URL from API
-        id: api
+      - name: Extract video ID
+        id: extract
         run: |
-          VIDEO_URL="${{ github.event.inputs.url }}"
-          API_URL="https://ytdlapi.com/api/convert?url=${VIDEO_URL}&format=mp4"
-          RESPONSE=$(curl -s "$API_URL")
-          DOWNLOAD_URL=$(echo "$RESPONSE" | jq -r '.dlink')
-          echo "download_url=$DOWNLOAD_URL" >> $GITHUB_OUTPUT
+          URL="${{ github.event.inputs.url }}"
+          VID=$(echo "$URL" | grep -oP '(?<=v=)[^&]+' || echo "$URL" | grep -oP '(?<=youtu.be/)[^?]+')
+          echo "id=$VID" >> $GITHUB_OUTPUT
+
+      - name: Fetch video info from Invidious
+        id: info
+        run: |
+          VID="${{ steps.extract.outputs.id }}"
+          # Use a known working Invidious instance
+          INV_URL="https://yewtu.be/api/v1/videos/$VID"
+          RESPONSE=$(curl -s "$INV_URL")
+          echo "response=$RESPONSE" >> $GITHUB_OUTPUT
+
+      - name: Extract download URL
+        id: download_url
+        run: |
+          QUALITY="${{ github.event.inputs.quality }}"
+          RESPONSE='${{ steps.info.outputs.response }}'
+          if [ "$QUALITY" = "best" ]; then
+            # Pick the format with highest bitrate (fallback to first)
+            URL=$(echo "$RESPONSE" | jq -r '.formatStreams | sort_by(.bitrate) | last | .url')
+          else
+            URL=$(echo "$RESPONSE" | jq -r ".formatStreams[] | select(.height <= $QUALITY) | .url" | head -1)
+          fi
+          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+            echo "No format found for quality $QUALITY, falling back to best"
+            URL=$(echo "$RESPONSE" | jq -r '.formatStreams[0].url')
+          fi
+          echo "url=$URL" >> $GITHUB_OUTPUT
 
       - name: Download video
         run: |
-          curl -L -o video.mp4 "${{ steps.api.outputs.download_url }}"
+          URL="${{ steps.download_url.outputs.url }}"
+          curl -L -o video.mp4 "$URL"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
