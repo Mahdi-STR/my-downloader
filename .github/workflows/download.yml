@@ -1,4 +1,4 @@
-name: YouTube Downloader
+name: YouTube Downloader (No Cookies)
 
 on:
   workflow_dispatch:
@@ -21,14 +21,9 @@ on:
 jobs:
   download:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
       - name: Install yt-dlp
-        run: |
-          pip install yt-dlp
+        run: pip install yt-dlp
 
       - name: Download video
         run: |
@@ -42,8 +37,11 @@ jobs:
             FORMAT="-f 'best[height<=360]'"
           fi
           
-          echo "Using format: $FORMAT"
-          yt-dlp $FORMAT --output "downloads/%(title)s.%(ext)s" "${{ github.event.inputs.url }}"
+          yt-dlp $FORMAT \
+            --geo-bypass \
+            --extractor-args "youtube:player_client=android" \
+            --output "downloads/%(title)s.%(ext)s" \
+            "${{ github.event.inputs.url }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
