@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       quality:
-        description: 'Quality (best, 720, 480, 360)'
+        description: 'Quality'
         required: false
         default: '720'
         type: choice
@@ -27,26 +27,23 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install yt-dlp
-        run: pip install yt-dlp
-
-      - name: Set quality option
-        id: quality
         run: |
-          if [ "${{ github.event.inputs.quality }}" == "720" ]; then
-            echo "format=-f best[height<=720]" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.inputs.quality }}" == "480" ]; then
-            echo "format=-f best[height<=480]" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event.inputs.quality }}" == "360" ]; then
-            echo "format=-f best[height<=360]" >> $GITHUB_OUTPUT
-          else
-            echo "format=-f best" >> $GITHUB_OUTPUT
-          fi
+          pip install yt-dlp
 
       - name: Download video
         run: |
-          yt-dlp ${{ steps.quality.outputs.format }} \
-            --output "downloads/%(title)s.%(ext)s" \
-            "${{ github.event.inputs.url }}"
+          if [ "${{ github.event.inputs.quality }}" = "best" ]; then
+            FORMAT="-f best"
+          elif [ "${{ github.event.inputs.quality }}" = "720" ]; then
+            FORMAT="-f 'best[height<=720]'"
+          elif [ "${{ github.event.inputs.quality }}" = "480" ]; then
+            FORMAT="-f 'best[height<=480]'"
+          elif [ "${{ github.event.inputs.quality }}" = "360" ]; then
+            FORMAT="-f 'best[height<=360]'"
+          fi
+          
+          echo "Using format: $FORMAT"
+          yt-dlp $FORMAT --output "downloads/%(title)s.%(ext)s" "${{ github.event.inputs.url }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
