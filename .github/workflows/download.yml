@@ -1,61 +1,26 @@
-name: YouTube via Invidious
+name: Twitter/X Video Downloader
 
 on:
   workflow_dispatch:
     inputs:
       url:
-        description: 'YouTube video URL'
+        description: 'Twitter/X status URL (e.g., https://twitter.com/user/status/123456789)'
         required: true
-        type: string
-      quality:
-        description: 'Max height (360, 480, 720, best)'
-        default: '720'
         type: string
 
 jobs:
   download:
     runs-on: ubuntu-latest
     steps:
-      - name: Extract video ID
-        id: extract
-        run: |
-          URL="${{ github.event.inputs.url }}"
-          VID=$(echo "$URL" | grep -oP '(?<=v=)[^&]+' || echo "$URL" | grep -oP '(?<=youtu.be/)[^?]+')
-          echo "id=$VID" >> $GITHUB_OUTPUT
+      - name: Install yt-dlp
+        run: pip install yt-dlp
 
-      - name: Fetch video info from Invidious
-        id: info
+      - name: Download video from Twitter
         run: |
-          VID="${{ steps.extract.outputs.id }}"
-          # Use a known working Invidious instance
-          INV_URL="https://yewtu.be/api/v1/videos/$VID"
-          RESPONSE=$(curl -s "$INV_URL")
-          echo "response=$RESPONSE" >> $GITHUB_OUTPUT
-
-      - name: Extract download URL
-        id: download_url
-        run: |
-          QUALITY="${{ github.event.inputs.quality }}"
-          RESPONSE='${{ steps.info.outputs.response }}'
-          if [ "$QUALITY" = "best" ]; then
-            # Pick the format with highest bitrate (fallback to first)
-            URL=$(echo "$RESPONSE" | jq -r '.formatStreams | sort_by(.bitrate) | last | .url')
-          else
-            URL=$(echo "$RESPONSE" | jq -r ".formatStreams[] | select(.height <= $QUALITY) | .url" | head -1)
-          fi
-          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
-            echo "No format found for quality $QUALITY, falling back to best"
-            URL=$(echo "$RESPONSE" | jq -r '.formatStreams[0].url')
-          fi
-          echo "url=$URL" >> $GITHUB_OUTPUT
-
-      - name: Download video
-        run: |
-          URL="${{ steps.download_url.outputs.url }}"
-          curl -L -o video.mp4 "$URL"
+          yt-dlp -f best --output "downloads/%(title)s.%(ext)s" "${{ github.event.inputs.url }}"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: video
-          path: video.mp4
+          name: twitter-video
+          path: downloads/
