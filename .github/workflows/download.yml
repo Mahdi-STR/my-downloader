@@ -1,0 +1,55 @@
+name: YouTube Downloader
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'YouTube video URL'
+        required: true
+        type: string
+      quality:
+        description: 'Quality (best, 720, 480, 360)'
+        required: false
+        default: '720'
+        type: choice
+        options:
+          - best
+          - 720
+          - 480
+          - 360
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install yt-dlp
+        run: pip install yt-dlp
+
+      - name: Set quality option
+        id: quality
+        run: |
+          if [ "${{ github.event.inputs.quality }}" == "720" ]; then
+            echo "format=-f best[height<=720]" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.inputs.quality }}" == "480" ]; then
+            echo "format=-f best[height<=480]" >> $GITHUB_OUTPUT
+          elif [ "${{ github.event.inputs.quality }}" == "360" ]; then
+            echo "format=-f best[height<=360]" >> $GITHUB_OUTPUT
+          else
+            echo "format=-f best" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download video
+        run: |
+          yt-dlp ${{ steps.quality.outputs.format }} \
+            --output "downloads/%(title)s.%(ext)s" \
+            "${{ github.event.inputs.url }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: downloaded-video
+          path: downloads/
